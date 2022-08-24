@@ -8,13 +8,14 @@ const tokens = (n) => {
 }
 
 const decimals = (n) => {
+  // Turn bigNumbers into readable numbers.
   return n / 1000000000000000000
 }
 
 // Manipulating EVM via Increasing Block Timestamp for testing
 async function increaseTime(amount) {
   await hre.network.provider.send("evm_increaseTime", [amount])
-  console.log("EVM time " + amount + " seconds increased!")
+//  console.log("EVM time " + amount + " seconds increased!")
   }
 
 // Manipulating EVM via Mining Blocks
@@ -22,7 +23,7 @@ async function mineBlocks(amount) {
   for (let i = 0; i < amount; i++) {
   await hre.network.provider.send("evm_mine")
   }
-  console.log(amount + " Blocks Mined!")
+//  console.log(amount + " Blocks Mined!")
   }
 
 describe('ERC20Pool', () => {
@@ -180,38 +181,46 @@ describe('ERC20Pool', () => {
         result = await transaction.wait()
 
         beforeStaking = await perion.balanceOf(user1.address)
-        console.log(decimals(beforeStaking), "Perion amount on user1 BEFORE staking")
+
         // Connect user1 with the pool contract and stake amount
         transaction = await pool.connect(user1).stake(stake)
         result = await transaction.wait()
         afterStaking = await perion.balanceOf(user1.address)
-        console.log(decimals(afterStaking), "Perion amount on user1 AFTER staking")
 
-        // Check reward for duration
-        increaseTime(3600)
-        mineBlocks(10)
+                // Time speed the blockchain
+                increaseTime(86400) // more than 7 days
+                mineBlocks(25)
+
 
         // Connect user1 with the pool contract and claim rewards
         transaction = await pool.connect(user1).getReward()
         result = await transaction.wait()
 
         final = await perion.balanceOf(user1.address)
-        console.log(decimals(final), "Perion amount on user1 AFTER CLAIMING!")
+
         currentReward = final - afterStaking
 
+        let rewardGiven = result.events[2].args.reward
+       // console.log(decimals(currentReward), decimals(rewardGiven))
       })
 
       it('Tracks total token staked', async () => {
          expect(await pool.totalStaked()).to.equal(stake)
       })
 
-      it('emits a Claimed event', async () => {
+      it('Emits a Claimed event', async () => {
         const event = result.events[2] // 3 events are emitted
         expect(event.event).to.equal('RewardPaid')
 
         const args = event.args
         expect(args.user).to.equal(user1.address)
         expect(decimals(args.reward)).to.equal(decimals(currentReward))
+      })
+
+      it('User1 should claim the 100% total after 7 days', async () => {
+        const event = result.events[2]
+        const args = event.args
+        expect(decimals(args.reward)).to.equal(2000)
       })
 
     })
