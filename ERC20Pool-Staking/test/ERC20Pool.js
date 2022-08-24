@@ -83,28 +83,29 @@ describe('ERC20Pool', () => {
 
   describe('Unstaking Tokens', () => {
     let transaction, result
-    let amount = tokens(10)
+    let stake = tokens(15)
+    let withdraw = tokens(5)
+    let remainder = tokens(15 - 5)
 
     describe('Success', () => {
       beforeEach(async () => {
 
-        // Approve amount
-        transaction = await perion.connect(user1).approve(pool.address, amount)
+        // Approve stake amount
+        transaction = await perion.connect(user1).approve(pool.address, stake)
         result = await transaction.wait()
 
         // Connect user1 with the pool contract and stake amount
-        transaction = await pool.connect(user1).stake(amount)
+        transaction = await pool.connect(user1).stake(stake)
         result = await transaction.wait()
 
         // Connect user1 with the pool contract and withdraw amount
-        transaction = await pool.connect(user1).withdraw(amount)
+        transaction = await pool.connect(user1).withdraw(withdraw)
         result = await transaction.wait()
-        console.log(result.events[2])
 
       })
 
       it('Tracks total token staked', async () => {
-        expect(await pool.totalSupply()).to.equal(0)
+         expect(await pool.totalSupply()).to.equal(remainder)
       })
 
       it('emits a Withdrawn event', async () => {
@@ -113,12 +114,20 @@ describe('ERC20Pool', () => {
 
         const args = event.args
         expect(args.user).to.equal(user1.address)
-        expect(args.amount).to.equal(amount)
+        expect(args.amount).to.equal(withdraw)
       })
 
     })
 
-    // Failure Case.
+    describe('Failure', () => {
+      it('Fails when withdrawing more tokens that is staked', async () => {
+        await expect(pool.connect(user1).withdraw(tokens(20))).to.be.reverted
+      })
+
+      it('Fails trying to withdraw when no token is staked', async () => {
+        await expect(pool.connect(user2).withdraw(tokens(20))).to.be.reverted
+      })
+    })
 
     })
 
