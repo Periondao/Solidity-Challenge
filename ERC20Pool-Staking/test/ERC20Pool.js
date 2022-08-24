@@ -57,11 +57,11 @@ describe('ERC20Pool', () => {
 
       })
 
-      it('tracks total token staked', async () => {
+      it('Tracks total token staked', async () => {
         expect(await pool.totalSupply()).to.equal(amount)
       })
 
-      it('emits a Staked event', async () => {
+      it('Emits a Staked event', async () => {
         const event = result.events[1] // 2 events are emitted
         expect(event.event).to.equal('Staked')
 
@@ -73,13 +73,54 @@ describe('ERC20Pool', () => {
     })
 
     describe('Failure', () => {
-      it('fails when no tokens are approved', async () => {
+      it('Fails when no tokens are approved', async () => {
         // Don't approve any tokens before depositing
         await expect(pool.connect(user1).stake(amount)).to.be.reverted
       })
     })
 
   })
+
+  describe('Unstaking Tokens', () => {
+    let transaction, result
+    let amount = tokens(10)
+
+    describe('Success', () => {
+      beforeEach(async () => {
+
+        // Approve amount
+        transaction = await perion.connect(user1).approve(pool.address, amount)
+        result = await transaction.wait()
+
+        // Connect user1 with the pool contract and stake amount
+        transaction = await pool.connect(user1).stake(amount)
+        result = await transaction.wait()
+
+        // Connect user1 with the pool contract and withdraw amount
+        transaction = await pool.connect(user1).withdraw(amount)
+        result = await transaction.wait()
+        console.log(result.events[2])
+
+      })
+
+      it('Tracks total token staked', async () => {
+        expect(await pool.totalSupply()).to.equal(0)
+      })
+
+      it('emits a Withdrawn event', async () => {
+        const event = result.events[2] // 3 events are emitted
+        expect(event.event).to.equal('Withdrawn')
+
+        const args = event.args
+        expect(args.user).to.equal(user1.address)
+        expect(args.amount).to.equal(amount)
+      })
+
+    })
+
+    // Failure Case.
+
+    })
 
 
 })
