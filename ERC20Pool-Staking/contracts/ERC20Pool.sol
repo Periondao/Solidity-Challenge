@@ -1,9 +1,9 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
@@ -13,8 +13,10 @@ interface IToken {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (uint256);
 }
 
-
-contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
+contract ERC20Pool is Ownable,
+Pausable,
+ReentrancyGuard
+{
 
   using SafeMath for uint256;
 
@@ -30,7 +32,7 @@ contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
   mapping(address => uint256) public userRewardPerTokenPaid;
   mapping(address => uint256) public rewards;
 
-  uint256 private _totalSupply;
+  uint256 private _totalStaked;
   mapping(address => uint256) private _balances;
 
     /* ========== CONSTRUCTOR ========== */
@@ -43,8 +45,8 @@ contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
 
     /* ========== Read-Only Functions ========== */
 
-    function totalSupply() external view returns (uint256) {
-        return _totalSupply;
+    function totalStaked() external view returns (uint256) {
+        return _totalStaked;
     }
 
     function balanceOf(address account) external view returns (uint256) {
@@ -56,12 +58,12 @@ contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
     }
 
     function rewardPerToken() public view returns (uint256) {
-        if (_totalSupply == 0) {
+        if (_totalStaked == 0) {
             return rewardPerTokenStored;
         }
         return
             rewardPerTokenStored.add(
-                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(_totalSupply)
+                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(_totalStaked)
             );
     }
 
@@ -77,7 +79,7 @@ contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
 
     function stake(uint256 amount) external nonReentrant whenNotPaused updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
-        _totalSupply = _totalSupply.add(amount);
+        _totalStaked = _totalStaked.add(amount);
         _balances[msg.sender] = _balances[msg.sender].add(amount);
         perionToken.transferFrom(msg.sender, address(this), amount);
         emit Staked(msg.sender, amount);
@@ -85,7 +87,7 @@ contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
 
     function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
-        _totalSupply = _totalSupply.sub(amount);
+        _totalStaked = _totalStaked.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
         perionToken.transfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
@@ -117,6 +119,30 @@ contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
         _;
     }
 
+    /* ========== RESTRICTED FUNCTIONS ========== */
+
+    function notifyRewardAmount(uint256 reward) public onlyOwner updateReward(address(0)) {
+
+        if (block.timestamp >= periodFinish) {
+            rewardRate = reward.div(rewardsDuration);
+        } else {
+            uint256 remaining = periodFinish.sub(block.timestamp);
+            uint256 leftover = remaining.mul(rewardRate);
+            rewardRate = reward.add(leftover).div(rewardsDuration);
+        }
+
+        // Ensure the provided reward amount is not more than the balance in the contract.
+        // This keeps the reward rate in the right range, preventing overflows due to
+        // very high values of rewardRate in the earned and rewardsPerToken functions;
+        // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
+        uint balance = perionToken.balanceOf(address(this));
+        require(rewardRate <= balance.div(rewardsDuration), "Provided reward too high");
+
+        lastUpdateTime = block.timestamp;
+        periodFinish = block.timestamp.add(rewardsDuration);
+        emit RewardAdded(reward);
+    }
+
     /* ========== EVENTS ========== */
 
     event RewardAdded(uint256 reward);
@@ -127,3 +153,4 @@ contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
     event Recovered(address token, uint256 amount);
 
 }
+

@@ -1,15 +1,34 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
+const hre = require("hardhat")
 
 const tokens = (n) => {
   // Helper function for decimals.
   return ethers.utils.parseUnits(n.toString(), 'ether')
 }
 
+const decimals = (n) => {
+  return n / 1000000000000000000
+}
+
+// Manipulating EVM via Increasing Block Timestamp for testing
+async function increaseTime(amount) {
+  await hre.network.provider.send("evm_increaseTime", [amount])
+  console.log("EVM time " + amount + " seconds increased!")
+  }
+
+// Manipulating EVM via Mining Blocks
+async function mineBlocks(amount) {
+  for (let i = 0; i < amount; i++) {
+  await hre.network.provider.send("evm_mine")
+  }
+  console.log(amount + " Blocks Mined!")
+  }
+
 describe('ERC20Pool', () => {
   // Assigning global variables inside the function.
 
-  let team, user1, user2
+  let team, user1, user2, afterStaking, beforeStaking, final
 
   beforeEach(async () => {
     const ERC20Pool = await ethers.getContractFactory('ERC20Pool')
@@ -26,18 +45,27 @@ describe('ERC20Pool', () => {
     await transaction.wait()
 
     pool = await ERC20Pool.deploy(perion.address)
+
+    transaction = await perion.connect(team).transfer(pool.address, tokens(10000))
+    await transaction.wait()
+
+    transaction = await pool.connect(team).notifyRewardAmount(tokens(2000))
+    await transaction.wait()
   })
 
   describe('Deployment', () => {
 
     it('Tracks total staked tokens.', async () => {
-      expect(await pool.totalSupply()).to.equal(0)
+      expect(await pool.totalStaked()).to.equal(0)
     })
 
     it('The owner is the deployer', async () => {
       expect(await pool.owner()).to.equal(team.address)
     })
 
+    it('The contract holds PERION in it', async () => {
+      expect(await perion.balanceOf(pool.address)).to.equal(tokens(10000))
+    })
   })
 
   describe('Staking Tokens', () => {
@@ -58,7 +86,7 @@ describe('ERC20Pool', () => {
       })
 
       it('Tracks total token staked', async () => {
-        expect(await pool.totalSupply()).to.equal(amount)
+        expect(await pool.totalStaked()).to.equal(amount)
       })
 
       it('Emits a Staked event', async () => {
@@ -94,19 +122,27 @@ describe('ERC20Pool', () => {
         transaction = await perion.connect(user1).approve(pool.address, stake)
         result = await transaction.wait()
 
+        beforeStaking = await perion.balanceOf(user1.address)
         // Connect user1 with the pool contract and stake amount
         transaction = await pool.connect(user1).stake(stake)
         result = await transaction.wait()
 
+        afterStaking = await perion.balanceOf(user1.address)
         // Connect user1 with the pool contract and withdraw amount
         transaction = await pool.connect(user1).withdraw(withdraw)
         result = await transaction.wait()
+        let afterUnstaking = await perion.balanceOf(user1.address)
 
+        final = decimals(afterStaking) + 5;
       })
 
       it('Tracks total token staked', async () => {
-         expect(await pool.totalSupply()).to.equal(remainder)
+         expect(await pool.totalStaked()).to.equal(remainder)
       })
+
+      it('User1 receives back the unstaked tokens', async () => {
+        expect(decimals(await perion.balanceOf(user1.address))).to.equal(final)
+     })
 
       it('emits a Withdrawn event', async () => {
         const event = result.events[2] // 3 events are emitted
@@ -129,7 +165,67 @@ describe('ERC20Pool', () => {
       })
     })
 
+  })
+
+  describe('Claiming Rewards', () => {
+    let transaction, result, beforeStaking, afterStaking, final
+    let currentReward = 0
+    let stake = tokens(15)
+
+    describe('Success', () => {
+      beforeEach(async () => {
+
+        // Approve stake amount
+        transaction = await perion.connect(user1).approve(pool.address, stake)
+        result = await transaction.wait()
+
+        beforeStaking = await perion.balanceOf(user1.address)
+        console.log(decimals(beforeStaking), "Perion amount on user1 BEFORE staking")
+        // Connect user1 with the pool contract and stake amount
+        transaction = await pool.connect(user1).stake(stake)
+        result = await transaction.wait()
+        afterStaking = await perion.balanceOf(user1.address)
+        console.log(decimals(afterStaking), "Perion amount on user1 AFTER staking")
+
+        // Check reward for duration
+        increaseTime(3600)
+        mineBlocks(10)
+
+        // Connect user1 with the pool contract and claim rewards
+        transaction = await pool.connect(user1).getReward()
+        result = await transaction.wait()
+
+        final = await perion.balanceOf(user1.address)
+        console.log(decimals(final), "Perion amount on user1 AFTER CLAIMING!")
+        currentReward = final - afterStaking
+
+      })
+
+      it('Tracks total token staked', async () => {
+         expect(await pool.totalStaked()).to.equal(stake)
+      })
+
+      it('emits a Claimed event', async () => {
+        const event = result.events[2] // 3 events are emitted
+        expect(event.event).to.equal('RewardPaid')
+
+        const args = event.args
+        expect(args.user).to.equal(user1.address)
+        expect(decimals(args.reward)).to.equal(decimals(currentReward))
+      })
+
     })
 
+   /* describe('Failure', () => {
+      it('Fails when withdrawing more tokens that is staked', async () => {
+        await expect(pool.connect(user1).withdraw(tokens(20))).to.be.reverted
+      })
+
+      it('Fails trying to withdraw when no token is staked', async () => {
+        await expect(pool.connect(user2).withdraw(tokens(20))).to.be.reverted
+      })
+    }) */
+
+  })
 
 })
