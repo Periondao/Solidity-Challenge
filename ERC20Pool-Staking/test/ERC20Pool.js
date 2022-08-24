@@ -40,5 +40,46 @@ describe('ERC20Pool', () => {
 
   })
 
+  describe('Staking Tokens', () => {
+    let transaction, result
+    let amount = tokens(10)
+
+    describe('Success', () => {
+      beforeEach(async () => {
+
+        // Approve amount
+        transaction = await perion.connect(user1).approve(pool.address, amount)
+        result = await transaction.wait()
+
+        // Connect user1 with the pool contract and stake amount
+        transaction = await pool.connect(user1).stake(amount)
+        result = await transaction.wait()
+
+      })
+
+      it('tracks total token staked', async () => {
+        expect(await pool.totalSupply()).to.equal(amount)
+      })
+
+      it('emits a Staked event', async () => {
+        const event = result.events[1] // 2 events are emitted
+        expect(event.event).to.equal('Staked')
+
+        const args = event.args
+        expect(args.user).to.equal(user1.address)
+        expect(args.amount).to.equal(amount)
+      })
+
+    })
+
+    describe('Failure', () => {
+      it('fails when no tokens are approved', async () => {
+        // Don't approve any tokens before depositing
+        await expect(pool.connect(user1).stake(amount)).to.be.reverted
+      })
+    })
+
+  })
+
 
 })
