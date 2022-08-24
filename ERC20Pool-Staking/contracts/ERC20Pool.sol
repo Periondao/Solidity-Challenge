@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 interface IToken {
     function transfer(address recipient, uint256 amount) external returns (bool);
@@ -12,79 +13,117 @@ interface IToken {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (uint256);
 }
 
+
 contract ERC20Pool is Pausable, Ownable, ReentrancyGuard {
 
-  IToken perionToken;
+  using SafeMath for uint256;
 
-      struct StakeInfo {
-        uint256 startTS;
-        uint256 endTS;
-        uint256 amount;
-        uint256 claimed;
-    }
+  /* ========== STATE VARIABLES ========== */
 
-  event Staked(address indexed from, uint256 amount);
-  event Unstaked(address indexed from, uint256 amount);
+  IToken public perionToken;
+  uint256 public periodFinish = 0;
+  uint256 public rewardRate = 0;
+  uint256 public rewardsDuration = 7 days;
+  uint256 public lastUpdateTime;
+  uint256 public rewardPerTokenStored;
 
-  // 7 Days (7 * 24 * 60 * 60)
-  uint256 public rewardDuration = 604800;
+  mapping(address => uint256) public userRewardPerTokenPaid;
+  mapping(address => uint256) public rewards;
 
-  uint256 public totalStakers;
-  uint256 public totalStaked;
+  uint256 private _totalSupply;
+  mapping(address => uint256) private _balances;
 
-  mapping(address => StakeInfo) public stakeInfos;
-  mapping(address => bool) public addressStaked;
+    /* ========== CONSTRUCTOR ========== */
 
-    constructor(IToken _tokenAddress) {
+    constructor(IToken _tokenAddress)
+    {
         require(address(_tokenAddress) != address(0),"Token Address cannot be address 0");
         perionToken = _tokenAddress;
-        totalStakers = 0;
-        totalStaked = 0;
     }
 
-    // Staking functionality
-    function stakeToken(uint256 stakeAmount) external payable whenNotPaused {
-        require(stakeAmount > 0, "Stake amount should be correct");
-        require(addressStaked[_msgSender()] == false, "You already participated");
-        require(perionToken.balanceOf(_msgSender()) >= stakeAmount, "Insufficient Balance");
+    /* ========== Read-Only Functions ========== */
 
-           perionToken.transferFrom(_msgSender(), address(this), stakeAmount);
-            totalStakers++;
-            totalStaked = totalStaked + stakeAmount;
-            addressStaked[_msgSender()] = true;
-
-            stakeInfos[_msgSender()] = StakeInfo({
-                startTS: block.timestamp,
-                endTS: block.timestamp,
-                amount: stakeAmount,
-                claimed: 0
-            });
-
-        emit Staked(_msgSender(), stakeAmount);
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
     }
 
-    // Unstaking functionality
-    function unstakeToken() external returns (bool){
-        require(addressStaked[_msgSender()] == true, "You have no staked token");
-        require(stakeInfos[_msgSender()].claimed == 0, "Already unstaked!");
-
-        uint256 stakeAmount = stakeInfos[_msgSender()].amount;
-        stakeInfos[_msgSender()].claimed == stakeAmount;
-        perionToken.transfer(_msgSender(), stakeAmount);
-        totalStaked = totalStaked - stakeAmount;
-
-
-        emit Unstaked(_msgSender(), stakeAmount);
-
-        return true;
+    function balanceOf(address account) external view returns (uint256) {
+        return _balances[account];
     }
 
-    function pause() external onlyOwner {
-        _pause();
+    function lastTimeRewardApplicable() public view returns (uint256) {
+        return block.timestamp < periodFinish ? block.timestamp : periodFinish;
     }
 
-    function unpause() external onlyOwner {
-        _unpause();
+    function rewardPerToken() public view returns (uint256) {
+        if (_totalSupply == 0) {
+            return rewardPerTokenStored;
+        }
+        return
+            rewardPerTokenStored.add(
+                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(_totalSupply)
+            );
     }
+
+    function earned(address account) public view returns (uint256) {
+        return _balances[account].mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(rewards[account]);
+    }
+
+    function getRewardForDuration() external view returns (uint256) {
+        return rewardRate.mul(rewardsDuration);
+    }
+
+    /* ========== Transactions (with gas fees) ========== */
+
+    function stake(uint256 amount) external nonReentrant whenNotPaused updateReward(msg.sender) {
+        require(amount > 0, "Cannot stake 0");
+        _totalSupply = _totalSupply.add(amount);
+        _balances[msg.sender] = _balances[msg.sender].add(amount);
+        perionToken.transferFrom(msg.sender, address(this), amount);
+        emit Staked(msg.sender, amount);
+    }
+
+    function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
+        require(amount > 0, "Cannot withdraw 0");
+        _totalSupply = _totalSupply.sub(amount);
+        _balances[msg.sender] = _balances[msg.sender].sub(amount);
+        perionToken.transfer(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount);
+    }
+
+    function getReward() public nonReentrant updateReward(msg.sender) {
+        uint256 reward = rewards[msg.sender];
+        if (reward > 0) {
+            rewards[msg.sender] = 0;
+            perionToken.transfer(msg.sender, reward);
+            emit RewardPaid(msg.sender, reward);
+        }
+    }
+
+    function exit() external {
+        withdraw(_balances[msg.sender]);
+        getReward();
+    }
+
+    /* ========== MODIFIERS ========== */
+
+    modifier updateReward(address account) {
+        rewardPerTokenStored = rewardPerToken();
+        lastUpdateTime = lastTimeRewardApplicable();
+        if (account != address(0)) {
+            rewards[account] = earned(account);
+            userRewardPerTokenPaid[account] = rewardPerTokenStored;
+        }
+        _;
+    }
+
+    /* ========== EVENTS ========== */
+
+    event RewardAdded(uint256 reward);
+    event Staked(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event RewardPaid(address indexed user, uint256 reward);
+    event RewardsDurationUpdated(uint256 newDuration);
+    event Recovered(address token, uint256 amount);
 
 }
