@@ -42,7 +42,10 @@ describe('ERC20Pool', () => {
     user1 = accounts[1]
     user2 = accounts[2]
 
-    let transaction = await perion.connect(team).transfer(user1.address, tokens(100))
+    let transaction = await perion.connect(team).transfer(user1.address, tokens(1000))
+    await transaction.wait()
+
+    transaction = await perion.connect(team).transfer(user2.address, tokens(3000))
     await transaction.wait()
 
     pool = await ERC20Pool.deploy(perion.address)
@@ -188,7 +191,7 @@ describe('ERC20Pool', () => {
         afterStaking = await perion.balanceOf(user1.address)
 
                 // Time speed the blockchain
-                increaseTime(86400) // more than 7 days
+                increaseTime(614800) // more than 7 days
                 mineBlocks(25)
 
 
@@ -222,19 +225,65 @@ describe('ERC20Pool', () => {
         const args = event.args
         expect(decimals(args.reward)).to.equal(2000)
       })
-
     })
+  })
 
-   /* describe('Failure', () => {
-      it('Fails when withdrawing more tokens that is staked', async () => {
-        await expect(pool.connect(user1).withdraw(tokens(20))).to.be.reverted
+  describe('Claiming Rewards for multiple users', () => {
+    let transaction, result, beforeStaking, afterStaking, final, result2
+    let currentReward = 0
+    let stake = tokens(1000)
+
+    describe('Success', () => {
+      beforeEach(async () => {
+
+        // Approve stake amount for user1
+        transaction = await perion.connect(user1).approve(pool.address, stake)
+        result = await transaction.wait()
+        beforeStaking = await perion.balanceOf(user1.address)
+
+        // Connect user1 with the pool contract and stake amount
+        transaction = await pool.connect(user1).stake(stake)
+        result = await transaction.wait()
+        afterStaking = await perion.balanceOf(user1.address)
+
+        // Approve stake amount for user2
+        transaction = await perion.connect(user2).approve(pool.address, tokens(3000))
+        result = await transaction.wait()
+
+        // Connect user2 with the pool contract and stake amount
+        transaction = await pool.connect(user2).stake(tokens(3000))
+        result = await transaction.wait()
+
+                // Time speed the blockchain
+                increaseTime(614800) // more than 7 days
+                mineBlocks(25)
+
+        // Connect user1 with the pool contract and claim rewards
+        transaction = await pool.connect(user1).getReward()
+        result = await transaction.wait()
+
+        // Connect user2 with the pool contract and claim rewards
+        transaction = await pool.connect(user2).getReward()
+        result2 = await transaction.wait()
+
       })
 
-      it('Fails trying to withdraw when no token is staked', async () => {
-        await expect(pool.connect(user2).withdraw(tokens(20))).to.be.reverted
+      it('Tracks total token staked', async () => {
+         expect(await pool.totalStaked()).to.equal(tokens(4000))
       })
-    }) */
 
+      it('User1 should claim the 25% total after 7 days', async () => {
+        const event = result.events[2]
+        const args = event.args
+        expect(decimals(args.reward)).to.equal(500)
+      })
+
+      it('User2 should claim the 75% total after 7 days', async () => {
+        const event = result2.events[2]
+        const args = event.args
+        expect(decimals(args.reward)).to.equal(1500)
+      })
+    })
   })
 
 })
