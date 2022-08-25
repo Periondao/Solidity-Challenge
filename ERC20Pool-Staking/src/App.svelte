@@ -1,17 +1,21 @@
 <script>
   import { ethers } from 'ethers';
   import Pool from '../artifacts/contracts/ERC20Pool.sol/ERC20Pool.json';
-  import Token from '../artifacts/contracts/Token.sol/Token.json';
   import svelteLogo from './assets/svelte.svg'
-  import Counter from './lib/Counter.svelte'
+
 
     /* ========== Variables ========== */
 
-  const poolAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"; // Enviroment variable/Pool Address
-  const perionAddress = "0x5fbdb2315678afecb367f032d93f642f64180aa3"; // Enviroment variable/Perion token address
-  let amount, unstakeAmount;
+  const poolAddress = "0x625662606c5Bd61f349F8Db55306c23AC08F4EaB"; // Enviroment variable/Pool Address
+  const perionAddress = "0xd88a5cCe20629c850F15534532a5BEFAD0B2Da6c"; // Enviroment variable/Perion token address
+  let amount, unstakeAmount, rewardAmount, stakedPerion;
 
     /* ========== Functions ========== */
+
+  const decimals = (n) => {
+    // Turn bigNumbers into readable numbers.
+    return n / 1000000000000000000
+  }
 
   // Connect MetaMask
   async function getSigner() {
@@ -51,7 +55,7 @@
     let result = await poolContract.withdraw(unstakeAmount)
 
     console.log('Tokens Unstaked!', result)
-}
+  }
 
   async function claimRewards() {
 
@@ -62,7 +66,26 @@
   let result = await poolContract.getReward()
 
   console.log('Rewards Claimed!', result)
-}
+  }
+
+  async function startRewards(amount) {
+
+  const signer = await getSigner()
+  const rewardAmount = ethers.utils.parseUnits(amount.toString(), 18);
+
+  const poolContract = new ethers.Contract(poolAddress, Pool.abi, signer)
+  let result = await poolContract.notifyRewardAmount(rewardAmount)
+
+  console.log(`Rewards started with: ${amount} Perion tokens!`)
+  }
+
+  async function queryStaked() {
+  const signer = await getSigner()
+  const poolContract = new ethers.Contract(poolAddress, Pool.abi, signer)
+  stakedPerion = decimals(await poolContract.totalStaked())
+  console.log(`Amount of staked Perion is: ${stakedPerion}`)
+
+  }
 </script>
 
 <main>
@@ -76,13 +99,14 @@
   </div>
   <h1>Vite + Svelte</h1>
 
-  <div class="card">
-    <Counter />
-  </div>
 
   <div>
 		<button on:click={getSigner}>Connect MetaMask</button>
 	</div>
+  <div>
+		<button on:click={queryStaked}>Fetch Staked Perion</button>
+    <h2>{stakedPerion}</h2>
+  </div>
   <div>
     <input bind:value={amount} placeholder="Set amount of Perion tokens to">
 		<button on:click={() => stakeTokens(amount)}>Stake Perion Tokens</button>
@@ -94,6 +118,11 @@
   <div>
     <h2>Claim your Rewards!</h2>
 		<button on:click={() => claimRewards()}>Claim earned Perion Tokens</button>
+	</div>
+
+  <div>
+    <input bind:value={rewardAmount} placeholder="Rewards">
+		<button on:click={() => startRewards(rewardAmount)}> Start rewards period with {rewardAmount} Perion</button>
 	</div>
 
 </main>
