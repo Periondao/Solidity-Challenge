@@ -9,7 +9,7 @@
 
   const poolAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"; // Enviroment variable/Pool Address
   const perionAddress = "0x5fbdb2315678afecb367f032d93f642f64180aa3"; // Enviroment variable/Perion token address
-  let amount = 0
+  let amount, unstakeAmount;
 
     /* ========== Functions ========== */
 
@@ -24,7 +24,6 @@
   return signer;
   }
 
-  	// Fetch token contract from the blockchain.
 	async function stakeTokens(amount) {
 
 		const stakeAmount = ethers.utils.parseUnits(amount.toString(), 18);
@@ -41,6 +40,18 @@
 
 		console.log('Tokens Staked!', result)
 	}
+
+	async function unstakeTokens(amount) {
+
+    const unstakeAmount = ethers.utils.parseUnits(amount.toString(), 18);
+    const signer = await getSigner()
+
+    // Connect with Pool contract and unstake amount of tokens
+    const poolContract = new ethers.Contract(poolAddress, Pool.abi, signer)
+    let result = await poolContract.withdraw(unstakeAmount)
+
+    console.log('Tokens Unstaked!', result)
+}
 
 </script>
 
@@ -63,8 +74,12 @@
 		<button on:click={getSigner}>Connect MetaMask</button>
 	</div>
   <div>
-    <input bind:value={amount} placeholder="Set amount of Perion tokens to stake">
+    <input bind:value={amount} placeholder="Set amount of Perion tokens to">
 		<button on:click={() => stakeTokens(amount)}>Stake Perion Tokens</button>
+	</div>
+  <div>
+    <input bind:value={unstakeAmount} placeholder="Set amount of Perion tokens to">
+		<button on:click={() => unstakeTokens(unstakeAmount)}>Unstake Perion Tokens</button>
 	</div>
 
 </main>
