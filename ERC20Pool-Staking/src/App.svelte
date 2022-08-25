@@ -41,7 +41,7 @@
 		console.log('Tokens Staked!', result)
 	}
 
-	async function unstakeTokens(amount) {
+  async function unstakeTokens(amount) {
 
     const unstakeAmount = ethers.utils.parseUnits(amount.toString(), 18);
     const signer = await getSigner()
@@ -53,6 +53,16 @@
     console.log('Tokens Unstaked!', result)
 }
 
+  async function claimRewards() {
+
+  const signer = await getSigner()
+
+  // Connect with Pool contract and claim rewards
+  const poolContract = new ethers.Contract(poolAddress, Pool.abi, signer)
+  let result = await poolContract.getReward()
+
+  console.log('Rewards Claimed!', result)
+}
 </script>
 
 <main>
@@ -80,6 +90,10 @@
   <div>
     <input bind:value={unstakeAmount} placeholder="Set amount of Perion tokens to">
 		<button on:click={() => unstakeTokens(unstakeAmount)}>Unstake Perion Tokens</button>
+	</div>
+  <div>
+    <h2>Claim your Rewards!</h2>
+		<button on:click={() => claimRewards()}>Claim earned Perion Tokens</button>
 	</div>
 
 </main>
