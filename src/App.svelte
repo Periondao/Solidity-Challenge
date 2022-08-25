@@ -86,6 +86,26 @@
   console.log(`Amount of staked Perion is: ${stakedPerion}`)
 
   }
+
+  async function faucet() {
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+	  const hardhat1 = new ethers.Wallet( "b99894fd0142af7939405b09e3a4948bf403c1e3e7bab334cb0bd852ca64796d", provider )
+
+    const signer = await getSigner()
+    const address = await signer.getAddress()
+
+    let abi = ["function approve(address _spender, uint256 _value) public returns (bool success)"]
+    let contract = new ethers.Contract(perionAddress, abi, hardhat1)
+    let result = await contract.approve(address, ethers.utils.parseUnits("500", 18))
+    console.log("Allowance approved for:", result)
+
+    abi = ["function transfer(address _to, uint256 _value) public returns (bool success)"]
+    contract = new ethers.Contract(perionAddress, abi, hardhat1)
+    result = await contract.transfer(address, ethers.utils.parseUnits("500", 18))
+    console.log("500 PERION has been sent.", result)
+
+  }
 </script>
 
 <main>
@@ -101,12 +121,15 @@
 
 
   <div>
-		<button on:click={getSigner}>Connect MetaMask</button>
+		<button on:click={getSigner}>Connect MetaMask to Kovan</button>
 	</div>
   <div>
 		<button on:click={queryStaked}>Fetch Staked Perion</button>
     <h2>{stakedPerion} Perion Staked!</h2>
   </div>
+  <div>
+		<button on:click={() => faucet()}>PERION Faucet</button>
+	</div>
   <div>
     <input bind:value={amount} placeholder="Set amount of Perion tokens to">
 		<button on:click={() => stakeTokens(amount)}>Stake Perion Tokens</button>
