@@ -1,3 +1,8 @@
+const tokens = (n) => {
+  // Helper function for decimals.
+  return ethers.utils.parseUnits(n.toString(), 'ether')
+}
+
 async function main() {
   console.log('Preparing deployment... \n')
 
@@ -20,6 +25,14 @@ async function main() {
   const pool = await ERC20Pool.deploy(perion.address)
   await pool.deployed()
   console.log(`Pool contract Deployed to: ${pool.address}`)
+
+  transaction = await perion.connect(accounts[0]).transfer(pool.address, tokens(10000))
+  await transaction.wait()
+  console.log(`Team has deposited 10.000 Perion Tokens into the Pool's contract at: ${pool.address}`)
+
+  transaction = await pool.connect(accounts[0]).notifyRewardAmount(tokens(2000))
+  await transaction.wait()
+  console.log(`Team have initiated the rewardPeriod(7 Days) with 2.000 Perion Tokens as reward.`)
 }
 
 main()
