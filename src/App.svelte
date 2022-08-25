@@ -105,7 +105,7 @@
 	</div>
   <div>
 		<button on:click={queryStaked}>Fetch Staked Perion</button>
-    <h2>{stakedPerion}</h2>
+    <h2>{stakedPerion} Perion Staked!</h2>
   </div>
   <div>
     <input bind:value={amount} placeholder="Set amount of Perion tokens to">
