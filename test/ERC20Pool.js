@@ -2,6 +2,9 @@ const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const hre = require("hardhat")
 
+
+
+    /* ========== Helper Functions ========== */
 const tokens = (n) => {
   // Helper function for decimals.
   return ethers.utils.parseUnits(n.toString(), 'ether')
@@ -25,6 +28,8 @@ async function mineBlocks(amount) {
   }
 //  console.log(amount + " Blocks Mined!")
   }
+
+    /* ========== Tests ========== */
 
 describe('ERC20Pool', () => {
   // Assigning global variables inside the function.
@@ -69,6 +74,9 @@ describe('ERC20Pool', () => {
 
     it('The contract holds PERION in it', async () => {
       expect(await perion.balanceOf(pool.address)).to.equal(tokens(10000))
+    })
+    it('Fails when someone other than the Owner tries to set rewards', async () => {
+      await expect(pool.connect(user1).notifyRewardAmount(tokens(2000))).to.be.reverted
     })
   })
 
