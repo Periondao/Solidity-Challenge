@@ -94,13 +94,14 @@ describe('ERC20Pool', () => {
         // Connect user1 with the pool contract and stake amount
         transaction = await pool.connect(user1).stake(amount)
         result = await transaction.wait()
-
       })
 
       it('Tracks total token staked', async () => {
         expect(await pool.totalStaked()).to.equal(amount)
       })
-
+      it('Tracks total token staked by user', async () => {
+        expect(await pool.balanceOf(user1.address)).to.equal(amount)
+      })
       it('Emits a Staked event', async () => {
         const event = result.events[1] // 2 events are emitted
         expect(event.event).to.equal('Staked')

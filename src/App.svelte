@@ -8,7 +8,7 @@
 
   const poolAddress = "0x625662606c5Bd61f349F8Db55306c23AC08F4EaB"; // Enviroment variable/Pool Address
   const perionAddress = "0xd88a5cCe20629c850F15534532a5BEFAD0B2Da6c"; // Enviroment variable/Perion token address
-  let amount, unstakeAmount, rewardAmount, stakedPerion;
+  let amount, unstakeAmount, rewardAmount, stakedPerion, usersBalance, stakingAddress;
 
     /* ========== Functions ========== */
 
@@ -26,6 +26,15 @@
   let signer = provider.getSigner()
   console.log('Connected MetaMask!', provider)
   return signer;
+  }
+
+  async function userBalance() {
+    const signer = await getSigner()
+    const address = await signer.getAddress()
+    stakingAddress = address
+    const poolContract = new ethers.Contract(poolAddress, Pool.abi, signer)
+    usersBalance = decimals(await poolContract.balanceOf(address))
+    console.log(`Amount of staked Perion by user: ${address} is: ${usersBalance}`)
   }
 
 	async function stakeTokens(amount) {
@@ -130,6 +139,11 @@
   <div>
 		<button on:click={() => faucet()}>PERION Faucet</button>
 	</div>
+  <div>
+		<button on:click={userBalance}>Fetch Staked Perion on your Account</button>
+    <h2>{usersBalance} Perion Staked by address: {stakingAddress}</h2>
+  </div>
+
   <div>
     <input bind:value={amount} placeholder="Set amount of Perion tokens to">
 		<button on:click={() => stakeTokens(amount)}>Stake Perion Tokens</button>
